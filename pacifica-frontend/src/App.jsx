@@ -4,7 +4,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import axios from './axiosConfig.js';
 
-import UserManagementPage from './pages/UserManagementPage';
+import UserManagementPage from './pages/UserManagementPage.jsx';
 import UserListPage from './pages/UserListPage';
 
 import './App.css';

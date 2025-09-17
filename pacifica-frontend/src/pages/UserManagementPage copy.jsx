@@ -29,66 +29,44 @@ const UserManagementPage = ({ isEditMode = false }) => {
     const [userLogs, setUserLogs] = useState([]); 
 
     // --- Data Fetching ---
-  useEffect(() => {
-    const fetchInitialData = async () => {
-        setLoading(true);
-        setError('');
-        try {
-            // สร้าง Array เพื่อเก็บ API request ที่จะรัน
-            const requestsToRun = [
-                axios.get('/api/permissions/'),
-            ];
+    useEffect(() => {
+        const fetchInitialData = async () => {
+            setLoading(true);
+            setError('');
+            try {
+                const permissionsResponse = await axios.get('/api/permissions/');
+                setAllPermissions(permissionsResponse.data);
 
-            // ถ้าเป็นโหมดแก้ไข, เพิ่ม request สำหรับดึง User และ Log เข้าไป
-            if (isEditMode && userId) {
-                requestsToRun.push(axios.get(`/api/users/${userId}/`));
-                requestsToRun.push(axios.get(`/api/users/${userId}/logs/`));
+                if (isEditMode && userId) {
+                    const userResponse = await axios.get(`/api/users/${userId}/`);
+                    const userData = userResponse.data;
+                    setFormData({
+                        username: userData.username || '', password: '', email: userData.email || '',
+                        first_name: userData.first_name || '', last_name: userData.last_name || '',
+                        employee_id: userData.employee_id || '', full_name_eng: userData.full_name_eng || '',
+                        full_name_thai: userData.full_name_thai || '', position: userData.position || '',
+                        phone: userData.phone || '', company: userData.company || '',
+                        department: userData.department || '', brand: userData.brand || '',
+                        user_status: userData.user_status || 'Current',
+                        has_pacifica_app: userData.has_pacifica_app || false,
+                        has_color_printing: userData.has_color_printing || false,
+                        has_cctv: userData.has_cctv || false, has_vpn: userData.has_vpn || false,
+                        has_wifi_other_devices: userData.has_wifi_other_devices || false,
+                        software_request: userData.software_request || '',
+                        share_drive_request: userData.share_drive_request || '',
+                    });
+                    const userPermissionIds = new Set(userData.permissions.map(p => p.id));
+                    setSelectedPermissions(userPermissionIds);
+                }
+            } catch (err) {
+                setError('Could not load data. Please try again later.');
+                console.error("Failed to fetch data:", err);
+            } finally {
+                setLoading(false);
             }
-            
-            // รัน request ทั้งหมดพร้อมกัน
-            const responses = await Promise.all(requestsToRun);
-            
-            // Response ตัวแรกคือ Permissions เสมอ
-            setAllPermissions(responses[0].data);
-
-            // ถ้าเป็นโหมดแก้ไข, จัดการกับ Response ที่เหลือ
-            if (isEditMode && userId) {
-                const userData = responses[1].data;
-                const logsData = responses[2].data; // <-- ดึงข้อมูล Log
-                
-                // setFormData เหมือนเดิม
-                setFormData({
-                    username: userData.username || '', password: '', email: userData.email || '',
-                    first_name: userData.first_name || '', last_name: userData.last_name || '',
-                    employee_id: userData.employee_id || '', full_name_eng: userData.full_name_eng || '',
-                    full_name_thai: userData.full_name_thai || '', position: userData.position || '',
-                    phone: userData.phone || '', company: userData.company || '',
-                    department: userData.department || '', brand: userData.brand || '',
-                    user_status: userData.user_status || 'Current',
-                    has_pacifica_app: userData.has_pacifica_app || false,
-                    has_color_printing: userData.has_color_printing || false,
-                    has_cctv: userData.has_cctv || false, has_vpn: userData.has_vpn || false,
-                    has_wifi_other_devices: userData.has_wifi_other_devices || false,
-                    software_request: userData.software_request || '',
-                    share_drive_request: userData.share_drive_request || '',
-                });
-                
-                // setSelectedPermissions เหมือนเดิม
-                const userPermissionIds = new Set(userData.permissions.map(p => p.id));
-                setSelectedPermissions(userPermissionIds);
-                
-                // --- เพิ่มบรรทัดนี้: นำข้อมูล Log ที่ได้มาใส่ใน State ---
-                setUserLogs(logsData);
-            }
-        } catch (err) {
-            setError('Could not load data. Please try again later.');
-            console.error("Failed to fetch data:", err);
-        } finally {
-            setLoading(false);
-        }
-    };
-    fetchInitialData();
-}, [isEditMode, userId]);
+        };
+        fetchInitialData();
+    }, [isEditMode, userId]);
 
     // --- Data Processing ---
     const groupedPermissions = useMemo(() => {
@@ -301,7 +279,8 @@ const UserManagementPage = ({ isEditMode = false }) => {
                     </div>
                 </fieldset>
 
-                {/* --- เพิ่ม Fieldset นี้ทั้งหมดเข้าไป --- */}
+                {/* --- เพิ่ม Fieldset นี้กลับเข้าไป --- */}
+                {/* จะแสดงก็ต่อเมื่ออยู่ในโหมดแก้ไขเท่านั้น */}
                 {isEditMode && (
                     <fieldset className="form-section">
                         <legend>User Change History</legend>
@@ -331,6 +310,7 @@ const UserManagementPage = ({ isEditMode = false }) => {
                         )}
                     </fieldset>
                 )}
+
                 
                 <button type="submit" className="submit-button">
                     {isEditMode ? 'Save Changes' : 'Create User'}

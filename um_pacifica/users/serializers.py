@@ -47,6 +47,7 @@ class UserSerializer(serializers.ModelSerializer):
         }
 
 class LogSerializer(serializers.ModelSerializer):
+    target_user_name = serializers.CharField(source='target_user.username', read_only=True)
     class Meta:
         model = Log
         fields = '__all__'
