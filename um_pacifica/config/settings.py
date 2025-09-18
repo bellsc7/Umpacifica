@@ -172,3 +172,56 @@ INTERNAL_IPS = [
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 AUTH_USER_MODEL = 'users.User'
+
+
+# LDAP(เพิ่มที่ท้ายไฟล์)
+import ldap
+from django_auth_ldap.config import LDAPSearch
+
+AUTHENTICATION_BACKENDS = [
+    'django_auth_ldap.backend.LDAPBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+# --- LDAP Configuration (ฉบับสมบูรณ์ที่แก้ไขแล้ว) ---
+
+# 1. URL ของ LDAP Server
+AUTH_LDAP_SERVER_URI = "ldap://AD3.pacifica.local:389"
+
+# 2. Bind DN และ Password (User ที่มีสิทธิ์ค้นหา)
+AUTH_LDAP_BIND_DN = "CN=get ldap,OU=SYSTEMSACCOUNT,OU=PACIFICA GROUP,DC=pacifica,DC=local"
+AUTH_LDAP_BIND_PASSWORD = "Prg@2025#"
+
+# 3. ตำแหน่งและ Filter ที่จะใช้ค้นหา User
+AUTH_LDAP_USER_SEARCH = LDAPSearch(
+    "OU=PACIFICA GROUP,DC=pacifica,DC=local", # <-- ใช้ Search Base ที่ถูกต้อง
+    ldap.SCOPE_SUBTREE,
+    "(sAMAccountName=%(user)s)"
+)
+
+# 4. การ Mapping ระหว่างฟิลด์ใน LDAP กับฟิลด์ในโมเดล User ของเรา
+#    (ลบฟิลด์ phone ที่ไม่มีอยู่ออกไป)
+AUTH_LDAP_USER_ATTR_MAP = {
+    "username": "sAMAccountName",
+    "first_name": "givenName",
+    "last_name": "sn",
+    "company": "company",
+    "email": "mail",
+    "full_name_eng": "displayName",
+    "employee_id": "employeeID",
+    "department": "department",
+    "position": "title",
+    # "phone": "telephoneNumber", # <-- คอมเมนต์หรือลบบรรทัดนี้ทิ้ง
+}
+
+
+
+# (ทางเลือกที่ดี) เพิ่มการตั้งค่านี้เพื่อจัดการกับ User ที่ไม่มีในฐานข้อมูล
+#AUTH_LDAP_USER_FLAGS_BY_GROUP = {
+#  "is_staff": "cn=django_staff,ou=Groups,dc=yourcompany,dc=com",
+#   "is_superuser": "cn=django_superusers,ou=Groups,dc=yourcompany,dc=com",
+#}
+
+# (ทางเลือกที่ดี) บอกให้ Django สร้าง User ขึ้นมาใหม่ถ้าหาเจอใน LDAP แต่ไม่มีในฐานข้อมูล
+AUTH_LDAP_ALWAYS_UPDATE_USER = True
+AUTH_LDAP_FIND_GROUP_PERMS = True

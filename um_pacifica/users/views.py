@@ -4,10 +4,14 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.decorators import action # ตรวจสอบว่ามี import นี้
+from rest_framework.views import APIView
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.http import JsonResponse
 from .models import User, Permission, Log, System
 from .serializers import UserSerializer, PermissionSerializer, LogSerializer, SystemSerializer
+from django.conf import settings
+
+import ldap
 
 # ----------------- ViewSet สำหรับการจัดการข้อมูล User -----------------
 class UserViewSet(viewsets.ModelViewSet):
@@ -18,6 +22,17 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by('username')
     serializer_class = UserSerializer
     permission_classes = [IsAdminUser]
+
+    def perform_create(self, serializer):
+        """
+        Custom logic for creating a new user.
+        Sets a dummy, unusable password.
+        """
+        # --- แก้ไขส่วนนี้: ตั้งค่า Password ที่ใช้งานไม่ได้ ---
+        user = serializer.save()
+        user.set_unusable_password()
+        user.save()
+
 
     def _get_permission_names(self, permission_ids):
         """Helper function to get a sorted list of permission names from IDs."""
@@ -103,7 +118,56 @@ class LogViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = LogSerializer
     permission_classes = [IsAdminUser]
 
+class LdapUserSearchView(APIView):
+    """
+    API endpoint to search for a user in LDAP and return their attributes
+    WITHOUT creating or modifying any local Django user.
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, username):
+        if User.objects.filter(username__iexact=username).exists():
+            return Response(
+                {"error": f"User '{username}' already exists in this application."},
+                status=status.HTTP_409_CONFLICT
+            )
+        try:
+            con = ldap.initialize(settings.AUTH_LDAP_SERVER_URI)
+            con.protocol_version = ldap.VERSION3
+            con.simple_bind_s(settings.AUTH_LDAP_BIND_DN, settings.AUTH_LDAP_BIND_PASSWORD)
+
+            search_base = settings.AUTH_LDAP_USER_SEARCH.base_dn
+            search_filter = settings.AUTH_LDAP_USER_SEARCH.filterstr % {'user': username}
+            required_attrs = list(settings.AUTH_LDAP_USER_ATTR_MAP.values())
+            
+            result = con.search_s(search_base, ldap.SCOPE_SUBTREE, search_filter, required_attrs)
+
+            if not result:
+                return Response({"error": "User not found in LDAP"}, status=status.HTTP_404_NOT_FOUND)
+
+            user_dn, ldap_data = result[0]
+             # ---!!! เพิ่ม PRINT STATEMENT ตรงนี้ !!!---
+            print("--- LDAP Data Received ---")
+            print(ldap_data)
+            print("--------------------------")
+            user_data_to_return = {}
+            
+            for django_field, ldap_attr in settings.AUTH_LDAP_USER_ATTR_MAP.items():
+                if ldap_attr in ldap_data:
+                    user_data_to_return[django_field] = ldap_data[ldap_attr][0].decode('utf-8')
+
+            return Response(user_data_to_return)
+
+        except ldap.LDAPError as e:
+            return Response({"error": f"LDAP Error: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        finally:
+            if 'con' in locals() and con:
+                con.unbind_s()
+
+
 # ----------------- CSRF Token View -----------------
 @ensure_csrf_cookie
 def get_csrf_token(request):
     return JsonResponse({"detail": "CSRF cookie set"})
+
+

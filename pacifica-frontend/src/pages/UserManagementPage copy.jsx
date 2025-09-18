@@ -24,49 +24,70 @@ const UserManagementPage = ({ isEditMode = false }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [generatedUsername, setGeneratedUsername] = useState('');
-
-      // --- เพิ่มบรรทัดนี้ที่ขาดไป ---
     const [userLogs, setUserLogs] = useState([]); 
+    const [ldapSearchUsername, setLdapSearchUsername] = useState('');
 
     // --- Data Fetching ---
-    useEffect(() => {
-        const fetchInitialData = async () => {
-            setLoading(true);
-            setError('');
-            try {
-                const permissionsResponse = await axios.get('/api/permissions/');
-                setAllPermissions(permissionsResponse.data);
+  useEffect(() => {
+    const fetchInitialData = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            // สร้าง Array เพื่อเก็บ API request ที่จะรัน
+            const requestsToRun = [
+                axios.get('/api/permissions/'),
+            ];
 
-                if (isEditMode && userId) {
-                    const userResponse = await axios.get(`/api/users/${userId}/`);
-                    const userData = userResponse.data;
-                    setFormData({
-                        username: userData.username || '', password: '', email: userData.email || '',
-                        first_name: userData.first_name || '', last_name: userData.last_name || '',
-                        employee_id: userData.employee_id || '', full_name_eng: userData.full_name_eng || '',
-                        full_name_thai: userData.full_name_thai || '', position: userData.position || '',
-                        phone: userData.phone || '', company: userData.company || '',
-                        department: userData.department || '', brand: userData.brand || '',
-                        user_status: userData.user_status || 'Current',
-                        has_pacifica_app: userData.has_pacifica_app || false,
-                        has_color_printing: userData.has_color_printing || false,
-                        has_cctv: userData.has_cctv || false, has_vpn: userData.has_vpn || false,
-                        has_wifi_other_devices: userData.has_wifi_other_devices || false,
-                        software_request: userData.software_request || '',
-                        share_drive_request: userData.share_drive_request || '',
-                    });
-                    const userPermissionIds = new Set(userData.permissions.map(p => p.id));
-                    setSelectedPermissions(userPermissionIds);
-                }
-            } catch (err) {
-                setError('Could not load data. Please try again later.');
-                console.error("Failed to fetch data:", err);
-            } finally {
-                setLoading(false);
+            // ถ้าเป็นโหมดแก้ไข, เพิ่ม request สำหรับดึง User และ Log เข้าไป
+            if (isEditMode && userId) {
+                requestsToRun.push(axios.get(`/api/users/${userId}/`));
+                requestsToRun.push(axios.get(`/api/users/${userId}/logs/`));
             }
-        };
-        fetchInitialData();
-    }, [isEditMode, userId]);
+            
+            // รัน request ทั้งหมดพร้อมกัน
+            const responses = await Promise.all(requestsToRun);
+            
+            // Response ตัวแรกคือ Permissions เสมอ
+            setAllPermissions(responses[0].data);
+
+            // ถ้าเป็นโหมดแก้ไข, จัดการกับ Response ที่เหลือ
+            if (isEditMode && userId) {
+                const userData = responses[1].data;
+                const logsData = responses[2].data; // <-- ดึงข้อมูล Log
+                
+                // setFormData เหมือนเดิม
+                setFormData({
+                    username: userData.username || '', password: '', email: userData.email || '',
+                    first_name: userData.first_name || '', last_name: userData.last_name || '',
+                    employee_id: userData.employee_id || '', full_name_eng: userData.full_name_eng || '',
+                    full_name_thai: userData.full_name_thai || '', position: userData.position || '',
+                    phone: userData.phone || '', company: userData.company || '',
+                    department: userData.department || '', brand: userData.brand || '',
+                    user_status: userData.user_status || 'Current',
+                    has_pacifica_app: userData.has_pacifica_app || false,
+                    has_color_printing: userData.has_color_printing || false,
+                    has_cctv: userData.has_cctv || false, has_vpn: userData.has_vpn || false,
+                    has_wifi_other_devices: userData.has_wifi_other_devices || false,
+                    software_request: userData.software_request || '',
+                    share_drive_request: userData.share_drive_request || '',
+                });
+                
+                // setSelectedPermissions เหมือนเดิม
+                const userPermissionIds = new Set(userData.permissions.map(p => p.id));
+                setSelectedPermissions(userPermissionIds);
+                
+                // --- เพิ่มบรรทัดนี้: นำข้อมูล Log ที่ได้มาใส่ใน State ---
+                setUserLogs(logsData);
+            }
+        } catch (err) {
+            setError('Could not load data. Please try again later.');
+            console.error("Failed to fetch data:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+    fetchInitialData();
+}, [isEditMode, userId]);
 
     // --- Data Processing ---
     const groupedPermissions = useMemo(() => {
@@ -81,9 +102,9 @@ const UserManagementPage = ({ isEditMode = false }) => {
         }, {});
     }, [allPermissions]);
 
-    // --- Handler Functions ---
+    // --- Handler Functions Auto fullname to User---
     const handleChange = (e) => {
-        const { name, value, type, checked } = e.target;
+      const { name, value, type, checked } = e.target;
         const newFormData = { ...formData, [name]: type === 'checkbox' ? checked : value };
         setFormData(newFormData);
         
@@ -143,7 +164,45 @@ const UserManagementPage = ({ isEditMode = false }) => {
             }
         }
     };
-    
+
+    // --- สร้าง Handler function ใหม่สำหรับปุ่ม "Fetch" ---
+    const handleLdapFetch = async () => {
+        if (!ldapSearchUsername) {
+            alert('Please enter a username to search in LDAP.');
+            return;
+        }
+        try {
+            const response = await axios.get(`/api/ldap-search/${ldapSearchUsername}/`);
+            const ldapData = response.data;
+            
+            // นำข้อมูลที่ได้จาก LDAP มาเติมลงในฟอร์มโดยอัตโนมัติ
+            setFormData(prev => ({
+                ...prev,
+                username: ldapData.username || prev.username,
+                email: ldapData.email || prev.email,
+                first_name: ldapData.first_name || prev.first_name,
+                last_name: ldapData.last_name || prev.last_name,
+                full_name_eng: ldapData.full_name_eng || prev.full_name_eng,
+                employee_id: ldapData.employee_id || prev.employee_id,
+                department: ldapData.department || prev.department,
+                position: ldapData.position || prev.position,
+                phone: ldapData.phone || prev.phone,
+            }));
+            
+            // ถ้าเราใช้ full_name_eng ในการสร้าง username ก็สามารถ trigger logic เดิมได้
+            if (ldapData.full_name_eng) {
+                // ... (logic สร้าง generatedUsername) ...
+            }
+
+            alert('User data fetched successfully!');
+
+        } catch (error) {
+            const errorMsg = error.response?.data?.error || 'Failed to fetch user from LDAP.';
+            alert(errorMsg);
+            console.error("LDAP Fetch Error:", error);
+        }
+    };
+        
     if (loading) return <div className="form-container"><p>Loading...</p></div>;
 
    return (
@@ -152,7 +211,30 @@ const UserManagementPage = ({ isEditMode = false }) => {
                 <h1>{isEditMode ? `Edit User: ${formData.full_name_eng || formData.username}` : 'Create New User'}</h1>
 
                 {error && <div className="error-message">{error}</div>}
-
+               
+               {/* --- เพิ่มส่วนค้นหา LDAP (เฉพาะโหมดสร้าง) --- */}
+                {!isEditMode && (
+                    <fieldset className="form-section">
+                        <legend>Fetch User from LDAP</legend>
+                        <div className="grid-container" style={{ gridTemplateColumns: '2fr 1fr' }}>
+                            <div className="form-group">
+                                <label htmlFor="ldap-search">Enter Username (e.g.,User_su)</label>
+                                <input
+                                    type="text"
+                                    id="ldap-search"
+                                    value={ldapSearchUsername}
+                                    onChange={(e) => setLdapSearchUsername(e.target.value)}
+                                    placeholder="Username in Active Directory"
+                                />
+                            </div>
+                            <div className="form-group" style={{ justifyContent: 'flex-end' }}>
+                                <button type="button" onClick={handleLdapFetch} className="submit-button" style={{ backgroundColor: '#28a745' }}>
+                                    Fetch Data
+                                </button>
+                            </div>
+                        </div>
+                    </fieldset>
+                )}
                 <fieldset className="form-section">
                     <legend>Login Credentials</legend>
                     <div className="grid-container" style={{gridTemplateColumns: '1fr 1fr'}}>
@@ -279,8 +361,7 @@ const UserManagementPage = ({ isEditMode = false }) => {
                     </div>
                 </fieldset>
 
-                {/* --- เพิ่ม Fieldset นี้กลับเข้าไป --- */}
-                {/* จะแสดงก็ต่อเมื่ออยู่ในโหมดแก้ไขเท่านั้น */}
+                {/* --- เพิ่ม Fieldset นี้ทั้งหมดเข้าไป --- */}
                 {isEditMode && (
                     <fieldset className="form-section">
                         <legend>User Change History</legend>
@@ -310,7 +391,6 @@ const UserManagementPage = ({ isEditMode = false }) => {
                         )}
                     </fieldset>
                 )}
-
                 
                 <button type="submit" className="submit-button">
                     {isEditMode ? 'Save Changes' : 'Create User'}

@@ -42,8 +42,10 @@ class UserSerializer(serializers.ModelSerializer):
             'permission_ids'    # สำหรับ POST/PUT
         ]
         # ทำให้ Password เป็นแบบ write-only (ไม่แสดงผลกลับไป)
+        # --- แก้ไขส่วนนี้ ---
         extra_kwargs = {
-            'password': {'write_only': True}
+            # บอกให้ password ไม่ใช่ field ที่ต้องกรอก แต่ยังคงรับค่าได้
+            'password': {'write_only': True, 'required': False, 'allow_null': True}
         }
 
 class LogSerializer(serializers.ModelSerializer):

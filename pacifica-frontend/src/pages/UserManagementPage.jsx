@@ -23,10 +23,8 @@ const UserManagementPage = ({ isEditMode = false }) => {
     const [selectedPermissions, setSelectedPermissions] = useState(new Set());
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [generatedUsername, setGeneratedUsername] = useState('');
-
-      // --- เพิ่มบรรทัดนี้ที่ขาดไป ---
     const [userLogs, setUserLogs] = useState([]); 
+    const [ldapSearchUsername, setLdapSearchUsername] = useState('');
 
     // --- Data Fetching ---
   useEffect(() => {
@@ -103,23 +101,14 @@ const UserManagementPage = ({ isEditMode = false }) => {
         }, {});
     }, [allPermissions]);
 
-    // --- Handler Functions ---
+    // --- Handler Functions Auto fullname to User---
     const handleChange = (e) => {
-        const { name, value, type, checked } = e.target;
-        const newFormData = { ...formData, [name]: type === 'checkbox' ? checked : value };
-        setFormData(newFormData);
-        
-        if (name === 'full_name_eng' && !isEditMode) {
-            const nameParts = value.trim().split(/\s+/);
-            if (nameParts.length > 0 && nameParts[0]) {
-                const firstName = nameParts[0].toLowerCase();
-                const lastNamePart = nameParts.length > 1 && nameParts[nameParts.length - 1] 
-                    ? nameParts[nameParts.length - 1].substring(0, 2).toLowerCase() : '';
-                setGeneratedUsername(`${firstName}${lastNamePart ? '_' + lastNamePart : ''}`);
-            } else { setGeneratedUsername(''); }
-        }
-    };
-    
+    const { name, value, type, checked } = e.target;
+    const newFormData = { ...formData, [name]: type === 'checkbox' ? checked : value };
+    setFormData(newFormData);
+    };   
+
+   
     const handlePermissionChange = (permissionId) => {
         setSelectedPermissions(prev => {
             const newSelected = new Set(prev);
@@ -129,43 +118,83 @@ const UserManagementPage = ({ isEditMode = false }) => {
         });
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError('');
-        
-        const submissionData = { ...formData, permission_ids: Array.from(selectedPermissions) };
-        
-        if (isEditMode) {
-            if (!submissionData.password) { delete submissionData.password; }
-            try {
-                await axios.patch(`/api/users/${userId}/`, submissionData);
-                alert('User updated successfully!');
-                navigate('/user-list');
-            } catch (err) { /* ... Error handling ... */ }
-        } else {
-            if (!formData.full_name_eng || !generatedUsername) {
-                alert('Full Name (Eng) is required to generate a username.');
-                return;
-            }
-            submissionData.username = generatedUsername;
-            submissionData.password = 'Pec@2025#';
-            try {
-                await axios.post('/api/users/', submissionData);
-                alert(`User '${generatedUsername}' created successfully!`);
-                navigate('/user-list');
-            } catch (err) {
-                const errorData = err.response?.data;
-                let errorMessage = 'Failed to create user.';
-                if (errorData) {
-                    errorMessage += `\n${Object.keys(errorData).map(key => `${key}: ${errorData[key]}`).join('\n')}`;
-                }
-                setError(errorMessage);
-                alert(errorMessage);
-                console.error('Error creating user:', errorData || err.message);
-            }
-        }
-    };
+// --- แก้ไขฟังก์ชันนี้ทั้งหมด ---
+const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
     
+    // เราจะใช้ข้อมูลจาก formData โดยตรง
+    const submissionData = { ...formData, permission_ids: Array.from(selectedPermissions) };
+    
+    // ไม่ว่าจะเป็นโหมดไหน เราก็ไม่ต้องส่ง password
+    delete submissionData.password;
+    
+    if (isEditMode) {
+        if (!submissionData.username) {
+            alert('Username is required.');
+            return;
+        }
+        try {
+            await axios.patch(`/api/users/${userId}/`, submissionData);
+            alert('User updated successfully!');
+            navigate('/user-list');
+        } catch (err) { /* ... Error handling ... */ }
+    } else { // โหมดสร้าง
+        if (!submissionData.username) {
+            alert('Please fetch a user from LDAP or enter a username manually.');
+            return;
+        }
+        try {
+            await axios.post('/api/users/', submissionData);
+            alert(`User '${submissionData.username}' created successfully!`);
+            navigate('/user-list');
+        } catch (err) {
+            const errorData = err.response?.data;
+            let errorMessage = 'Failed to create user.';
+            if (errorData) {
+                errorMessage += `\n${Object.keys(errorData).map(key => `${key}: ${errorData[key]}`).join('\n')}`;
+            }
+            setError(errorMessage);
+            alert(errorMessage);
+            console.error('Error creating user:', errorData || err.message);
+        }
+    }
+};
+
+    // --- สร้าง Handler function ใหม่สำหรับปุ่ม "Fetch" ---
+  const handleLdapFetch = async () => {
+    if (!ldapSearchUsername) {
+        alert('Please enter a username to search in LDAP.');
+        return;
+    }
+    try {
+        const response = await axios.get(`/api/ldap-search/${ldapSearchUsername}/`);
+        const ldapData = response.data;
+        
+        // นำข้อมูลที่ได้จาก LDAP มาเติมลงในฟอร์มโดยตรง
+        setFormData(prev => ({
+            ...prev, // <-- ใช้ prev เพื่อรักษาค่า checkbox ที่อาจจะติ๊กไว้
+            username: ldapData.username || '',
+            email: ldapData.email || '',
+            first_name: ldapData.first_name || '',
+            last_name: ldapData.last_name || '',
+            full_name_eng: ldapData.full_name_eng || '',
+            employee_id: ldapData.employee_id || '',
+            department: ldapData.department || '',
+            company: ldapData.company || '', // <-- เพิ่ม company
+            position: ldapData.position || '',
+            phone: ldapData.phone || '',
+        }));
+
+        alert('User data fetched successfully!');
+
+    } catch (error) {
+        const errorMsg = error.response?.data?.error || 'Failed to fetch user from LDAP.';
+        alert(errorMsg);
+        console.error("LDAP Fetch Error:", error);
+    }
+};
+
     if (loading) return <div className="form-container"><p>Loading...</p></div>;
 
    return (
@@ -174,28 +203,51 @@ const UserManagementPage = ({ isEditMode = false }) => {
                 <h1>{isEditMode ? `Edit User: ${formData.full_name_eng || formData.username}` : 'Create New User'}</h1>
 
                 {error && <div className="error-message">{error}</div>}
-
+               
+               {/* --- เพิ่มส่วนค้นหา LDAP (เฉพาะโหมดสร้าง) --- */}
+                {!isEditMode && (
+                    <fieldset className="form-section">
+                        <legend>Fetch User from LDAP</legend>
+                        <div className="grid-container" style={{ gridTemplateColumns: '2fr 1fr' }}>
+                            <div className="form-group">
+                                <label htmlFor="ldap-search">Enter Username (e.g.,User_su)</label>
+                                <input
+                                    type="text"
+                                    id="ldap-search"
+                                    value={ldapSearchUsername}
+                                    onChange={(e) => setLdapSearchUsername(e.target.value)}
+                                    placeholder="Username in Active Directory"
+                                />
+                            </div>
+                            <div className="form-group" style={{ justifyContent: 'flex-end' }}>
+                                <button type="button" onClick={handleLdapFetch} className="submit-button" style={{ backgroundColor: '#28a745' }}>
+                                    Fetch Data
+                                </button>
+                            </div>
+                        </div>
+                    </fieldset>
+                )}
+                
                 <fieldset className="form-section">
-                    <legend>Login Credentials</legend>
-                    <div className="grid-container" style={{gridTemplateColumns: '1fr 1fr'}}>
-                        <div className="form-group">
-                            <label htmlFor="username">Username*</label>
-                            {isEditMode ? (
-                                <input type="text" id="username" name="username" value={formData.username} onChange={handleChange} required />
-                            ) : (
-                                <input type="text" value={generatedUsername} readOnly disabled style={{ backgroundColor: '#e9ecef' }} />
-                            )}
-                        </div>
-                        <div className="form-group">
-                            <label htmlFor="password">{isEditMode ? 'New Password (leave blank to keep current)' : 'Default Password'}</label>
-                             {isEditMode ? (
-                                <input type="password" id="password" name="password" value={formData.password} onChange={handleChange} placeholder="Enter new password..." />
-                             ) : (
-                                <input type="text" value="Pec@2025#" readOnly disabled style={{ backgroundColor: '#e9ecef' }} />
-                             )}
-                        </div>
-                    </div>
+                <legend>Login Credentials</legend>
+                <div className="form-group">
+                <label htmlFor="username">Username*</label>
+                <input
+                type="text"
+                id="username"
+                name="username"
+                value={formData.username}
+                onChange={handleChange}
+                required
+                // ในโหมดแก้ไข เราจะปิดไม่ให้แก้ username
+                disabled={isEditMode}
+                />
+                </div>
+                <p style={{color: '#6c757d', fontSize: '0.9em', marginTop: '0.5rem'}}>
+                Password will be synced with Active Directory.
+                </p>
                 </fieldset>
+
 
                 <fieldset className="form-section">
                     <legend>Employee Details</legend>
