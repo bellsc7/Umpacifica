@@ -25,7 +25,7 @@ class User(AbstractUser):
         EXTERNAL = 'External', 'External'
 
     # --- เพิ่มฟิลด์ทั้งหมดจาก from.html ---
-    employee_id = models.CharField(max_length=50, unique=True, blank=True, null=True)
+    employee_id = models.CharField(max_length=50, unique=True, blank=True, null=True, default=None)
     full_name_eng = models.CharField(max_length=255, blank=True)
     full_name_thai = models.CharField(max_length=255, blank=True)
     position = models.CharField(max_length=100, blank=True)

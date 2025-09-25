@@ -1,0 +1,134 @@
+/* src/pages/UserListPage.css */
+
+.user-list-container {
+    width: 100%;
+}
+
+.list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.list-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: var(--text-primary);
+}
+
+.search-and-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.search-box {
+    position: relative;
+}
+
+.search-box .search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary);
+}
+
+.search-box input {
+    padding: 0.6rem 0.75rem 0.6rem 2.25rem; /* เว้นที่สำหรับ icon */
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    width: 300px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-box input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
+}
+
+.table-container {
+    overflow-x: auto; /* ทำให้ตารางสามารถ scroll แนวนอนได้บนจอเล็ก */
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.data-table th, 
+.data-table td {
+    border: 1px solid var(--border-color);
+    padding: 0.875rem 1rem;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.data-table thead {
+    background-color: #f9fafb;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.data-table tbody tr:nth-child(even) {
+    background-color: #f9fafb;
+}
+
+.data-table tbody tr:hover {
+    background-color: var(--secondary-color);
+}
+
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+}
+
+/* --- General Button Styles --- */
+.button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.875rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.button-primary {
+    color: #ffffff;
+    background-color: var(--primary-color);
+}
+.button-primary:hover {
+    background-color: var(--primary-color-dark);
+}
+
+.button-edit {
+    color: var(--primary-color-dark);
+    background-color: var(--secondary-color);
+    border-color: #d1d5db;
+}
+.button-edit:hover {
+    background-color: #e5e7eb;
+}
+
+.button-delete {
+    color: var(--danger-color);
+    background-color: #fee2e2;
+    border: none;
+}
+.button-delete:hover {
+    color: #ffffff;
+    background-color: var(--danger-color-dark);
+}

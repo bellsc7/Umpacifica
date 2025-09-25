@@ -1,18 +1,24 @@
+// vite.config.js (ฉบับสมบูรณ์)
+
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import basicSsl from '@vitejs/plugin-basic-ssl' // <-- 1. Import plugin
+import basicSsl from '@vitejs/plugin-basic-ssl'
+import path from 'path' // <-- 1. ตรวจสอบว่ามี import นี้
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     react(),
-    basicSsl() // <-- 2. เพิ่ม plugin เข้าไป
+    basicSsl()
   ],
   server: {
-    // --- 3. เพิ่มส่วนนี้เข้าไป ---
-    // เปลี่ยน Port และเปิด HTTPS
-    port: 5173, // หรือ Port อื่นที่คุณต้องการ
+    port: 5173,
     https: true,
-    host: '127.0.0.1', // ระบุ host ให้ชัดเจน
-  }
+    host: '127.0.0.1',
+  },
+  // --- 2. ตรวจสอบให้แน่ใจว่ามีส่วนนี้อยู่ ---
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
 })

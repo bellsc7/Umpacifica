@@ -174,6 +174,8 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 AUTH_USER_MODEL = 'users.User'
 
+
+# LDAP(เพิ่มที่ท้ายไฟล์)
 import ldap
 from django_auth_ldap.config import LDAPSearch, LDAPSearchUnion, GroupOfNamesType
 
@@ -182,20 +184,23 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-# --- LDAP Configuration (ฉบับสมบูรณ์) ---
+# --- LDAP Configuration (ฉบับสมบูรณ์ที่แก้ไขแล้ว) ---
+
+# 1. URL ของ LDAP Server
 AUTH_LDAP_SERVER_URI = "ldap://AD3.pacifica.local:389"
+
+# 2. Bind DN และ Password (User ที่มีสิทธิ์ค้นหา)
 AUTH_LDAP_BIND_DN = "CN=get ldap,OU=SYSTEMSACCOUNT,OU=PACIFICA GROUP,DC=pacifica,DC=local"
 AUTH_LDAP_BIND_PASSWORD = "Prg@2025#"
 
-# --- ใช้ LDAPSearchUnion ที่ถูกต้อง ---
+# 3. ตำแหน่งและ Filter ที่จะใช้ค้นหา User (ใช้ OU=PACIFICA GROUP เหมือนเดิม)
 AUTH_LDAP_USER_SEARCH = LDAPSearch(
     "OU=PACIFICA GROUP,DC=pacifica,DC=local",
     ldap.SCOPE_SUBTREE,
     "(sAMAccountName=%(user)s)"
 )
 
-# --- แก้ไข ATTR_MAP ให้ใช้ Attribute ที่แน่นอน ---
-# เราจะใช้ Attribute ที่มีโอกาสเจอสูงที่สุด
+# 4. การ Mapping ระหว่างฟิลด์ใน LDAP กับฟิลด์ในโมเดล User ของเรา
 AUTH_LDAP_USER_ATTR_MAP = {
     "username": "sAMAccountName",
     "first_name": "givenName",
@@ -212,17 +217,18 @@ AUTH_LDAP_USER_ATTR_MAP = {
 AUTH_LDAP_GROUP_SEARCH = LDAPSearch("DC=pacifica,DC=local", ldap.SCOPE_SUBTREE, "(objectClass=group)")
 AUTH_LDAP_GROUP_TYPE = GroupOfNamesType(name_attr="cn")
 
-# --- นี่คือส่วนที่สำคัญที่สุด ---
 # บอกให้ซิงค์ Flag จาก Group
 AUTH_LDAP_USER_FLAGS_BY_GROUP = {
-    "is_staff": "CN=Django_Admins,OU=SYSTEMSACCOUNT,OU=PACIFICA GROUP,DC=pacifica,DC=local",
-    "is_superuser": "CN=Django_Admins,OU=SYSTEMSACCOUNT,OU=PACIFICA GROUP,DC=pacifica,DC=local",
+    # ถ้า User เป็นสมาชิกของ Group นี้ ให้ตั้งค่า Flag เหล่านี้เป็น True
+    "is_staff": "CN=Django_staff,OU=SYSTEMSACCOUNT,OU=PACIFICA GROUP,DC=pacifica,DC=local", # <-- !! แก้ไข Path นี้ !!
+    "is_superuser": "CN=Django_Admins,OU=SYSTEMSACCOUNT,OU=PACIFICA GROUP,DC=pacifica,DC=local", # <-- !! แก้ไข Path นี้ !!
 }
 
-# --- ปิดฟีเจอร์ที่เป็นปัญหา ---
+# บอกให้ Django สร้าง/อัปเดต User และตรวจสอบ Group เสมอ
 AUTH_LDAP_ALWAYS_UPDATE_USER = True
-# AUTH_LDAP_FIND_GROUP_PERMS = True   # <-- ปิดอันนี้ไปก่อน
-# AUTH_LDAP_MIRROR_GROUPS = True    # <-- ปิดอันนี้ เพราะเป็นสาเหตุของ Error
+#AUTH_LDAP_FIND_GROUP_PERMS = True
+#AUTH_LDAP_MIRROR_GROUPS = True
+
 # --- เพิ่มส่วนนี้ทั้งหมดเข้าไป ---
 LOGGING = {
     'version': 1,

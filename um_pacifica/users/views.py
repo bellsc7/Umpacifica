@@ -2,16 +2,22 @@
 
 from rest_framework import viewsets, status
 from rest_framework.response import Response
+from rest_framework import status
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.decorators import action # ตรวจสอบว่ามี import นี้
 from rest_framework.views import APIView
+from django.contrib.auth import authenticate, login as django_login
+from rest_framework.authtoken.views import ObtainAuthToken
+from rest_framework.authtoken.models import Token
+from .models import User, Permission, Log, System
+from .serializers import (
+    UserSerializer, UserWriteSerializer, PermissionSerializer, 
+    LogSerializer, SystemSerializer
+)
+import ldap
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.http import JsonResponse
-from .models import User, Permission, Log, System
-from .serializers import UserSerializer, PermissionSerializer, LogSerializer, SystemSerializer
 from django.conf import settings
-
-import ldap
 
 # ----------------- ViewSet สำหรับการจัดการข้อมูล User -----------------
 class UserViewSet(viewsets.ModelViewSet):
@@ -20,8 +26,16 @@ class UserViewSet(viewsets.ModelViewSet):
     Only accessible by Admin users.
     """
     queryset = User.objects.all().order_by('username')
-    serializer_class = UserSerializer
+    #serializer_class = UserSerializer
     permission_classes = [IsAdminUser]
+
+    def get_serializer_class(self):
+        """
+        Return the serializer class to use for the request.
+        """
+        if self.action in ['create', 'update', 'partial_update']:
+            return UserWriteSerializer
+        return UserSerializer # Default for list, retrieve
 
     def perform_create(self, serializer):
         """
@@ -64,31 +78,92 @@ class UserViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         """
         Custom logic for updating an existing user.
-        Logs detailed information about permission changes (granted and revoked).
+        Logs detailed information about ALL changes, including profile fields,
+        system services, and permission levels.
         """
+        # 1. ดึงข้อมูลเก่า (instance) มาเก็บไว้ก่อน
         instance = self.get_object()
-        old_permission_ids = set(instance.permissions.values_list('id', flat=True))
-        user = serializer.save()
+        
+        # สร้าง Dictionary เพื่อเก็บค่าเก่าของฟิลด์ที่เราสนใจ
+        old_data = {
+            # Profile fields (ตัวอย่าง)
+            'full_name_eng': instance.full_name_eng,
+            'department': instance.department,
+            # System/Services fields
+            'has_pacifica_app': instance.has_pacifica_app,
+            'has_color_printing': instance.has_color_printing,
+            'has_cctv': instance.has_cctv,
+            'has_vpn': instance.has_vpn,
+            'has_wifi_other_devices': instance.has_wifi_other_devices,
+            'software_request': instance.software_request,
+            'share_drive_request': instance.share_drive_request,
+            # Permission Level (เก็บเป็น Set ของ ID)
+            'permissions': set(instance.permissions.values_list('id', flat=True))
+        }
+
+        # 2. บันทึกข้อมูลใหม่
+        updated_user = serializer.save()
+
+        # 3. สร้าง List เพื่อเก็บข้อความการเปลี่ยนแปลง
+        change_details = []
+
+        # 4. เปรียบเทียบฟิลด์ธรรมดา (Profile & Text Services)
+        #    สร้าง "pretty names" เพื่อให้ Log อ่านง่าย
+        fields_to_check = {
+            'full_name_eng': 'Full Name (Eng)',
+            'department': 'Department',
+            'software_request': 'Software Request',
+            'share_drive_request': 'Share Drive Request',
+        }
+        for field, pretty_name in fields_to_check.items():
+            old_value = old_data[field]
+            new_value = getattr(updated_user, field)
+            if old_value != new_value:
+                change_details.append(f"- {pretty_name}: changed from '{old_value}' to '{new_value}'")
+
+        # 5. เปรียบเทียบ Checkbox (System/Services)
+        checkbox_fields_to_check = {
+            'has_pacifica_app': 'Pacifica App',
+            'has_color_printing': 'Color Printing',
+            'has_cctv': 'CCTV',
+            'has_vpn': 'VPN',
+            'has_wifi_other_devices': 'Wifi for other devices',
+        }
+        for field, pretty_name in checkbox_fields_to_check.items():
+            old_value = old_data[field]
+            new_value = getattr(updated_user, field)
+            if old_value != new_value:
+                status = "Granted" if new_value else "Revoked"
+                change_details.append(f"- Service '{pretty_name}': {status}")
+
+        # 6. เปรียบเทียบ Permission Level (เหมือนเดิม แต่ปรับปรุงเล็กน้อย)
         new_permission_ids = set(p.id for p in serializer.validated_data.get('permissions', []))
-        added_ids = new_permission_ids - old_permission_ids
-        removed_ids = old_permission_ids - new_permission_ids
-        added_permissions = self._get_permission_names(added_ids)
-        removed_permissions = self._get_permission_names(removed_ids)
-        if not added_permissions and not removed_permissions:
-            return
-        details = [f"Permissions updated for user '{user.full_name_eng or user.username}'."]
-        if added_permissions:
-            details.append("\nPermissions Granted:")
-            details.extend([f"- {name}" for name in added_permissions])
-        if removed_permissions:
-            details.append("\nPermissions Revoked:")
-            details.extend([f"- {name}" for name in removed_permissions])
-        Log.objects.create(
-            actor=self.request.user.username,
-            action=f"Updated permissions for user: {user.username}",
-            target_user=user,
-            details='\n'.join(details)
-        )
+        added_ids = new_permission_ids - old_data['permissions']
+        removed_ids = old_data['permissions'] - new_permission_ids
+
+        if added_ids:
+            added_permissions = self._get_permission_names(added_ids)
+            change_details.append("\nPermissions Granted:")
+            change_details.extend([f"  - {name}" for name in added_permissions])
+        
+        if removed_ids:
+            removed_permissions = self._get_permission_names(removed_ids)
+            change_details.append("\nPermissions Revoked:")
+            change_details.extend([f"  - {name}" for name in removed_permissions])
+            
+        # 7. ถ้ามีการเปลี่ยนแปลงเกิดขึ้น ให้บันทึก Log
+        if change_details:
+            # สร้างข้อความ Header
+            log_header = f"User profile for '{updated_user.full_name_eng or updated_user.username}' was updated."
+            # รวม Header เข้ากับรายละเอียดการเปลี่ยนแปลง
+            final_details = [log_header] + change_details
+            
+            Log.objects.create(
+                actor=self.request.user.username,
+                action=f"Updated user: {updated_user.username}",
+                target_user=updated_user,
+                details='\n'.join(final_details)
+            )
 
     # --- เพิ่ม Action นี้เข้าไป ---
     @action(detail=True, methods=['get'], url_path='logs')
@@ -164,7 +239,58 @@ class LdapUserSearchView(APIView):
             if 'con' in locals() and con:
                 con.unbind_s()
 
+class LoginView(APIView):
+    permission_classes = []
 
+    def post(self, request, *args, **kwargs):
+        username = request.data.get('username')
+        password = request.data.get('password')
+
+        print("\n--- [DEBUG] LOGIN ATTEMPT ---")
+        print(f"Attempting login for user: {username}")
+
+        if not username or not password:
+            print("[DEBUG] FAILED: Username or password not provided.")
+            return Response({'error': 'Please provide both username and password'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = authenticate(request=request, username=username, password=password)
+
+        if user is not None:
+            print(f"[DEBUG] SUCCESS: authenticate() returned user object: {user.username}")
+            print(f"[DEBUG] User is staff: {user.is_staff}")
+            print(f"[DEBUG] User is superuser: {user.is_superuser}")
+            
+            django_login(request, user)
+            print("[DEBUG] django_login() called successfully. Session should be created.")
+            
+            token, created = Token.objects.get_or_create(user=user)
+            print(f"[DEBUG] Token created/retrieved: {token.key}")
+            print("--- [DEBUG] LOGIN END ---\n")
+            return Response({'token': token.key})
+        else:
+            print("[DEBUG] FAILED: authenticate() returned None.")
+            print("--- [DEBUG] LOGIN END ---\n")
+            return Response({'error': 'Unable to log in with provided credentials.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+class LogoutView(APIView):
+    """API endpoint for user logout, deletes auth token."""
+    permission_classes = [IsAuthenticated]
+    def post(self, request, format=None):
+        # ลบ Token ของผู้ใช้ที่ส่ง request มา
+        request.user.auth_token.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+class CurrentUserView(APIView):
+    """
+    API endpoint to get information about the currently logged-in user.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # request.user ตอนนี้คือ Custom User Model ของเราโดยตรง
+        # เราจึงสามารถส่งมันเข้าไปใน Serializer ได้เลย
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
 # ----------------- CSRF Token View -----------------
 @ensure_csrf_cookie
 def get_csrf_token(request):

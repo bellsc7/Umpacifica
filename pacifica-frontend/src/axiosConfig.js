@@ -15,4 +15,15 @@ axios.defaults.xsrfHeaderName = 'X-CSRFToken';
 
 console.log('AXIOS INSTANCE HAS BEEN CONFIGURED!');
 
+axios.interceptors.request.use(config => {
+    // ดึง token จาก localStorage
+    const token = localStorage.getItem('authToken');
+    if (token) {
+        // ถ้ามี token, ให้เพิ่ม Authorization header
+        config.headers['Authorization'] = `Token ${token}`;
+    }
+    return config;
+});
+
+
 export default axios;

@@ -4,21 +4,26 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from '../axiosConfig';
 import './UserManagementPage.css';
+import { FiDownloadCloud } from 'react-icons/fi';
+
+
+const initialFormData = {
+    username: '', password: '', email: '', first_name: '', last_name: '',
+    employee_id: '', full_name_eng: '', full_name_thai: '', position: '',
+    phone: '', company: '', department: '', brand: '', user_status: 'Current',
+    has_pacifica_app: false, has_color_printing: false, has_cctv: false,
+    has_vpn: false, has_wifi_other_devices: false, software_request: '',
+    share_drive_request: '',
+};
+
+
 
 const UserManagementPage = ({ isEditMode = false }) => {
     const { userId } = useParams();
     const navigate = useNavigate();
 
     // --- State Management ---
-    const [formData, setFormData] = useState({
-        username: '', password: '', email: '', first_name: '', last_name: '',
-        employee_id: '', full_name_eng: '', full_name_thai: '', position: '',
-        phone: '', company: '', department: '', brand: '', user_status: 'Current',
-        has_pacifica_app: false, has_color_printing: false, has_cctv: false,
-        has_vpn: false, has_wifi_other_devices: false, software_request: '',
-        share_drive_request: '',
-    });
-
+    const [formData, setFormData] = useState(initialFormData);
     const [allPermissions, setAllPermissions] = useState([]);
     const [selectedPermissions, setSelectedPermissions] = useState(new Set());
     const [loading, setLoading] = useState(true);
@@ -123,6 +128,13 @@ const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     
+    // --- 1. เพิ่ม Validation นี้เข้าไปที่บนสุด ---
+    // trim() เพื่อป้องกันกรณีที่ผู้ใช้กรอกแค่ช่องว่าง
+    if (!formData.employee_id || !formData.employee_id.trim()) {
+        alert('Employee ID is a required field.');
+        return; // หยุดการทำงานของฟังก์ชันทันที
+    }
+
     // เราจะใช้ข้อมูลจาก formData โดยตรง
     const submissionData = { ...formData, permission_ids: Array.from(selectedPermissions) };
     
@@ -147,7 +159,12 @@ const handleSubmit = async (e) => {
         try {
             await axios.post('/api/users/', submissionData);
             alert(`User '${submissionData.username}' created successfully!`);
-            navigate('/user-list');
+            
+            setFormData(initialFormData); // <-- ล้างข้อมูลในฟอร์ม
+            setSelectedPermissions(new Set()); // <-- ล้าง Permission ที่เคยเลือก
+            setLdapSearchUsername(''); // <-- (ทางเลือก) ล้างช่องค้นหา LDAP ด้วย
+            //navigate('/user-list');//
+
         } catch (err) {
             const errorData = err.response?.data;
             let errorMessage = 'Failed to create user.';
@@ -220,9 +237,9 @@ const handleSubmit = async (e) => {
                                 />
                             </div>
                             <div className="form-group" style={{ justifyContent: 'flex-end' }}>
-                                <button type="button" onClick={handleLdapFetch} className="submit-button" style={{ backgroundColor: '#28a745' }}>
-                                    Fetch Data
-                                </button>
+                                <button type="button" onClick={handleLdapFetch} className="fetch-button">
+    <                            FiDownloadCloud /> Fetch Data
+                                 </button>
                             </div>
                         </div>
                     </fieldset>
@@ -253,8 +270,15 @@ const handleSubmit = async (e) => {
                     <legend>Employee Details</legend>
                     <div className="grid-container" style={{gridTemplateColumns: '1fr 1fr'}}>
                         <div className="form-group">
-                            <label htmlFor="employee_id">Employee ID</label>
-                            <input type="text" id="employee_id" name="employee_id" value={formData.employee_id} onChange={handleChange} />
+                            <label htmlFor="employee_id">Employee ID*</label> {/* <-- 1. เพิ่ม * */}
+                             <input 
+                                type="text" 
+                                id="employee_id" 
+                                name="employee_id" 
+                                value={formData.employee_id} 
+                                onChange={handleChange} 
+                                required // <-- 2. เพิ่ม required
+                            />
                         </div>
                         <div className="form-group">
                             <label htmlFor="company">Company</label>
