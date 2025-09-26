@@ -132,3 +132,27 @@
     color: #ffffff;
     background-color: var(--danger-color-dark);
 }
+
+.table-section {
+    margin-bottom: 3rem;
+}
+
+.table-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--primary-color);
+    color: var(--text-primary);
+}
+
+.button-revoke {
+    color: #b91c1c; /* a darker red */
+    background-color: #fee2e2;
+}
+.button-revoke:hover {
+    color: #ffffff;
+    background-color: var(--danger-color);
+}

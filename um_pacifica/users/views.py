@@ -28,6 +28,40 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by('username')
     #serializer_class = UserSerializer
     permission_classes = [IsAdminUser]
+     # --- เพิ่ม Action นี้เข้าไป ---
+    @action(detail=True, methods=['post'], url_path='revoke')
+
+    def revoke_user(self, request, pk=None):
+        """
+        Action to revoke a user's access.
+        Sets the user's is_active flag to False.
+        """
+        try:
+            user_to_revoke = self.get_object()
+            
+            # ตรวจสอบว่า User ยังไม่ถูก Revoke ไปแล้ว
+            if not user_to_revoke.is_active:
+                return Response(
+                    {'error': 'User is already revoked.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # --- Logic การ Revoke ---
+            user_to_revoke.is_active = False
+            user_to_revoke.save()
+            
+            # --- บันทึก Log ---
+            Log.objects.create(
+                actor=request.user.username,
+                action=f"Revoked user access: {user_to_revoke.username}",
+                target_user=user_to_revoke,
+                details=f"User '{user_to_revoke.full_name_eng or user_to_revoke.username}' has been revoked."
+            )
+
+            return Response({'status': f'User {user_to_revoke.username} has been successfully revoked.'})
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def get_serializer_class(self):
         """

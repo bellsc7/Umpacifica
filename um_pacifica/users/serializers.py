@@ -32,7 +32,7 @@ class UserSerializer(serializers.ModelSerializer):
             'has_pacifica_app', 'has_color_printing', 'has_cctv',
             'has_vpn', 'has_wifi_other_devices',
             'software_request', 'share_drive_request',
-            'permissions',
+            'permissions','is_active',
         ]
 
 # --- Serializer สำหรับ "เขียน" ข้อมูล (Create/Update) ---

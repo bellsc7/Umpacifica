@@ -27,39 +27,37 @@ const LoginPage = ({ setIsLoggedIn }) => {
         }
     };
     return (
-        <div className="login-container">
-            <div className="login-box">
-                <h2>Welcome Back!</h2>
-                <form onSubmit={handleSubmit} className="login-form">
-                    {error && <p className="login-error">{error}</p>}
-                    <div className="form-group">
-                        <label htmlFor="username">Username</label>
-                        <input
-                            id="username"
-                            type="text"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            required
-                            placeholder="Enter your username"
-                        />
-                    </div>
-                    <div className="form-group">
-                        <label htmlFor="password">Password</label>
-                        <input
-                            id="password"
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            required
-                            placeholder="Enter your password"
-                        />
-                    </div>
-                    <button type="submit" className="login-button" disabled={loading}>
-                        {loading ? 'Logging in...' : 'Log In'}
-                    </button>
-                </form>
-            </div>
-        </div>
+        <div className="login-box">
+            <h2>Welcome Back!</h2>
+            <form onSubmit={handleSubmit} className="login-form">
+                {error && <p className="login-error">{error}</p>}
+                <div className="form-group">
+                    <label htmlFor="username">Username</label>
+                    <input
+                        id="username"
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        required
+                        placeholder="Enter your username"
+                    />
+                </div>
+                <div className="form-group">
+                    <label htmlFor="password">Password</label>
+                    <input
+                        id="password"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        placeholder="Enter your password"
+                    />
+                </div>
+                <button type="submit" className="login-button" disabled={loading}>
+                    {loading ? 'Logging in...' : 'Log In'}
+                </button>
+            </form>
+        </div> 
     );
 };
 
